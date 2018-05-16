@@ -16,6 +16,7 @@ import android.os.Bundle;
 import android.support.v7.widget.GridLayoutManager;
 import android.support.v7.widget.RecyclerView;
 import android.util.Log;
+import android.view.MenuItem;
 import android.view.View;
 import android.widget.Button;
 
@@ -50,6 +51,9 @@ public class MainActivity extends AppCompatActivity implements MyGifsAdapter.OnI
         mRecyclerView.setHasFixedSize(true);
 
         gifMaker = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES), "Gif Maker");
+        if (!gifMaker.mkdir()) {
+            Log.e("GifMakerActivity: ", "Directory doesn't exist");
+        }
 
         if (ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.WRITE_EXTERNAL_STORAGE)
                 != PackageManager.PERMISSION_GRANTED) {
@@ -191,4 +195,5 @@ public class MainActivity extends AppCompatActivity implements MyGifsAdapter.OnI
                 })
                 .show();
     }
+
 }
