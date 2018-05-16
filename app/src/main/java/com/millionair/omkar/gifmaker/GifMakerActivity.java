@@ -12,6 +12,7 @@ import android.media.MediaPlayer;
 import android.media.MediaScannerConnection;
 import android.net.Uri;
 import android.os.AsyncTask;
+import android.os.Build;
 import android.os.Environment;
 import android.provider.MediaStore;
 import android.support.v7.app.AppCompatActivity;
@@ -121,8 +122,8 @@ public class GifMakerActivity extends AppCompatActivity implements FramesAdapter
         }
 
         gifPath = getIntent().getStringExtra("GIFPATH");
-        Log.d("GifMakerActivity: ", gifPath);
         if (gifPath != null) {
+            Log.d("GifMakerActivity: ", gifPath);
             GifDecoder gifDecoder = new GifDecoder();
             boolean isSucceeded = gifDecoder.load(gifPath);
             if (isSucceeded) {
@@ -402,14 +403,16 @@ public class GifMakerActivity extends AppCompatActivity implements FramesAdapter
     }
 
     private void saveGif() {
-        new AsyncTask<Void, Void, Void>() {
+        new AsyncTask<Void, Integer, Void>() {
             ProgressDialog progressDialog;
             @Override
             protected void onPreExecute() {
                 super.onPreExecute();
                 progressDialog = new ProgressDialog(GifMakerActivity.this);
+                progressDialog.setMax(100);
                 progressDialog.setMessage("Please wait..");
                 progressDialog.setCancelable(false);
+                progressDialog.setProgressStyle(ProgressDialog.STYLE_HORIZONTAL);
                 progressDialog.show();
             }
 
@@ -428,15 +431,21 @@ public class GifMakerActivity extends AppCompatActivity implements FramesAdapter
                 }
 
                 try {
+                    int size = bitmaps.size();
                     int w = bitmaps.get(0).getWidth();
                     int h = bitmaps.get(0).getHeight();
                     GifEncoder gifEncoder = new GifEncoder();
                     gifEncoder.init(w, h, filePath.getAbsolutePath(), GifEncoder.EncodingType.ENCODING_TYPE_FAST);
                     for (Bitmap bitmap : bitmaps) {
                         gifEncoder.encodeFrame(Bitmap.createScaledBitmap(bitmap, w, h, false), duration);
+                        publishProgress(100/size);
                     }
                     gifEncoder.close();
                 } catch (FileNotFoundException e) {}
+
+                if (progressDialog.getProgress() <= progressDialog.getMax()) {
+                    publishProgress(progressDialog.getMax() - progressDialog.getProgress());
+                }
 
                 /*ByteArrayOutputStream bos = new ByteArrayOutputStream();
                 AnimatedGifEncoder encoder = new AnimatedGifEncoder();
@@ -488,9 +497,17 @@ public class GifMakerActivity extends AppCompatActivity implements FramesAdapter
             }
 
             @Override
+            protected void onProgressUpdate(Integer... values) {
+                super.onProgressUpdate(values);
+                progressDialog.incrementProgressBy(values[0]);
+            }
+
+            @Override
             protected void onPostExecute(Void aVoid) {
                 super.onPostExecute(aVoid);
-                progressDialog.dismiss();
+                if (progressDialog.getProgress() == progressDialog.getMax()) {
+                    progressDialog.dismiss();
+                }
             }
         }.execute();
     }

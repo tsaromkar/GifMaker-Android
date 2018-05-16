@@ -2,6 +2,7 @@ package com.millionair.omkar.gifmaker;
 
 import android.Manifest;
 import android.content.ClipData;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.net.Uri;
@@ -9,6 +10,7 @@ import android.os.Environment;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
+import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.support.v7.widget.GridLayoutManager;
@@ -169,5 +171,24 @@ public class MainActivity extends AppCompatActivity implements MyGifsAdapter.OnI
     @Override
     public void onItemClicked(int position) {
         startActivity(new Intent(MainActivity.this, GifMakerActivity.class).putExtra("GIFPATH",files[position].getAbsolutePath()).setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP));
+    }
+
+    @Override
+    public void onBackPressed() {
+        new AlertDialog.Builder(MainActivity.this)
+                .setMessage("Do you want to exit the app?")
+                .setPositiveButton("Yes", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        finish();
+                    }
+                })
+                .setNegativeButton("No", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+
+                    }
+                })
+                .show();
     }
 }
