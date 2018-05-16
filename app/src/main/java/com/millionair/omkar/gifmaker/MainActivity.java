@@ -5,6 +5,7 @@ import android.content.ClipData;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.net.Uri;
+import android.os.Environment;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
@@ -12,20 +13,26 @@ import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.support.v7.widget.GridLayoutManager;
 import android.support.v7.widget.RecyclerView;
+import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 
 import com.millionair.omkar.gifmaker.adapters.MyGifsAdapter;
 
+import java.io.File;
 import java.util.ArrayList;
+import java.util.EventListener;
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends AppCompatActivity implements MyGifsAdapter.OnItemClickedListener {
 
     Button mButton1;
     Button mButton2;
     Button mButton3;
     RecyclerView mRecyclerView;
     MyGifsAdapter mMyGifsAdapter;
+    File gifMaker;
+    File[] files;
+    boolean b2Clicked = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -37,18 +44,26 @@ public class MainActivity extends AppCompatActivity {
         mButton3 = (Button) findViewById(R.id.button3);
 
         mRecyclerView = (RecyclerView) findViewById(R.id.recyclerview);
-        mRecyclerView.setLayoutManager(new GridLayoutManager(MainActivity.this, 2));
+        mRecyclerView.setLayoutManager(new GridLayoutManager(MainActivity.this, 3));
         mRecyclerView.setHasFixedSize(true);
+
+        gifMaker = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES), "Gif Maker");
+
+        if (ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(MainActivity.this,
+                    new String[] {Manifest.permission.WRITE_EXTERNAL_STORAGE},
+                    1);
+        } else {
+            files = gifMaker.listFiles();
+            //Log.d("Gif: ", files[0].getAbsolutePath());
+            mMyGifsAdapter = new MyGifsAdapter(files, MainActivity.this, this);
+            mRecyclerView.setAdapter(mMyGifsAdapter);
+        }
 
         mButton1.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                if (ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.WRITE_EXTERNAL_STORAGE)
-                        != PackageManager.PERMISSION_GRANTED) {
-                    ActivityCompat.requestPermissions(MainActivity.this,
-                            new String[] {Manifest.permission.WRITE_EXTERNAL_STORAGE},
-                            1);
-                }
                 Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
                 intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
                 intent.setType("image/*");
@@ -59,15 +74,17 @@ public class MainActivity extends AppCompatActivity {
         mButton2.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
+                b2Clicked = true;
                 if (ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.WRITE_EXTERNAL_STORAGE)
                         != PackageManager.PERMISSION_GRANTED) {
                     ActivityCompat.requestPermissions(MainActivity.this,
                             new String[] {Manifest.permission.WRITE_EXTERNAL_STORAGE},
                             1);
+                } else {
+                    Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+                    intent.setType("video/*");
+                    startActivityForResult(Intent.createChooser(intent, "Select Video"), 2);
                 }
-                Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
-                intent.setType("video/*");
-                startActivityForResult(Intent.createChooser(intent, "Select Video"), 2);
             }
         });
 
@@ -79,9 +96,10 @@ public class MainActivity extends AppCompatActivity {
                     ActivityCompat.requestPermissions(MainActivity.this,
                             new String[] {Manifest.permission.CAMERA},
                             2);
+                } else {
+                    Intent intent = new Intent("android.media.action.VIDEO_CAMERA");
+                    startActivityForResult(intent, 2);
                 }
-                Intent intent = new Intent("android.media.action.VIDEO_CAMERA");
-                startActivityForResult(intent, 2);
             }
         });
     }
@@ -91,14 +109,23 @@ public class MainActivity extends AppCompatActivity {
         switch (requestCode) {
             case 1:
                 if ((grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED)) {
-
+                    if (b2Clicked) {
+                        Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+                        intent.setType("video/*");
+                        startActivityForResult(Intent.createChooser(intent, "Select Video"), 2);
+                    } else {
+                        files = gifMaker.listFiles();
+                        mMyGifsAdapter = new MyGifsAdapter(files, MainActivity.this, this);
+                        mRecyclerView.setAdapter(mMyGifsAdapter);
+                    }
                 } else {
 
                 }
                 break;
             case 2:
                 if ((grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED)) {
-
+                    Intent intent = new Intent("android.media.action.VIDEO_CAMERA");
+                    startActivityForResult(intent, 2);
                 } else {
 
                 }
@@ -108,9 +135,7 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-         if (data == null) {
-            return;
-        }
+        if (data == null) return;
         ArrayList<String> uris = new ArrayList<>();
         switch (requestCode) {
             case 1:
@@ -128,16 +153,21 @@ public class MainActivity extends AppCompatActivity {
                     //Log.d("MainActivityData: ", uri1.toString());
                     uris.add(singleUri.toString());
                 }
-                startActivity(new Intent(MainActivity.this, GifMakerActivity.class).putStringArrayListExtra("URIS", uris));
+                startActivity(new Intent(MainActivity.this, GifMakerActivity.class).putStringArrayListExtra("URIS", uris).setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP));
                 break;
             case 2:
                 Uri videoUri = data.getData();
                 if (videoUri != null) {
-                    //Log.d("MainActivityData: ", uri1.toString());
+                    Log.d("MainActivityData: ", videoUri.toString());
                     uris.add(videoUri.toString());
                 }
-                startActivity(new Intent(MainActivity.this, GifMakerActivity.class).putStringArrayListExtra("VIDEOURI", uris));
+                startActivity(new Intent(MainActivity.this, GifMakerActivity.class).putStringArrayListExtra("VIDEOURI", uris).setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP));
                 break;
         }
+    }
+
+    @Override
+    public void onItemClicked(int position) {
+        startActivity(new Intent(MainActivity.this, GifMakerActivity.class).putExtra("GIFPATH",files[position].getAbsolutePath()).setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP));
     }
 }

@@ -9,6 +9,7 @@ import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
 import android.media.MediaMetadataRetriever;
 import android.media.MediaPlayer;
+import android.media.MediaScannerConnection;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Environment;
@@ -18,6 +19,7 @@ import android.os.Bundle;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
 import android.support.v7.widget.helper.ItemTouchHelper;
+import android.text.TextUtils;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -27,10 +29,13 @@ import android.widget.ImageView;
 import android.widget.SeekBar;
 import android.widget.TextView;
 
+import com.bumptech.glide.load.resource.gif.GifDrawableEncoder;
 import com.millionair.omkar.gifmaker.classes.AnimatedGifEncoder;
 import com.millionair.omkar.gifmaker.classes.AnimatedGifWriter;
 import com.millionair.omkar.gifmaker.adapters.FramesAdapter;
 import com.millionair.omkar.gifmaker.classes.MyAnimationDrawable;
+import com.waynejo.androidndkgif.GifDecoder;
+import com.waynejo.androidndkgif.GifEncoder;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -41,7 +46,10 @@ import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Collections;
 
+import wseemann.media.FFmpegMediaMetadataRetriever;
+
 import static android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC;
+import static wseemann.media.FFmpegMediaMetadataRetriever.OPTION_CLOSEST;
 
 public class GifMakerActivity extends AppCompatActivity implements FramesAdapter.ResetFrames {
 
@@ -63,6 +71,7 @@ public class GifMakerActivity extends AppCompatActivity implements FramesAdapter
     ArrayList<Bitmap> bitmaps;
 
     Button mAddImagesButton;
+    String gifPath;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -106,6 +115,22 @@ public class GifMakerActivity extends AppCompatActivity implements FramesAdapter
             for (Bitmap bitmap: frameList) {
                 Log.d("GifMakerActivity: ", bitmap.toString());
                 animation.addFrame(new BitmapDrawable(getResources(), bitmap), duration);
+            }
+            animation.setOneShot(false);
+            mImageView.setImageDrawable(animation);
+        }
+
+        gifPath = getIntent().getStringExtra("GIFPATH");
+        Log.d("GifMakerActivity: ", gifPath);
+        if (gifPath != null) {
+            GifDecoder gifDecoder = new GifDecoder();
+            boolean isSucceeded = gifDecoder.load(gifPath);
+            if (isSucceeded) {
+                for (int i = 0; i < gifDecoder.frameNum(); ++i) {
+                    Bitmap bitmap = gifDecoder.frame(i);
+                    bitmaps.add(bitmap);
+                    animation.addFrame(new BitmapDrawable(getResources(), bitmap), duration);
+                }
             }
             animation.setOneShot(false);
             mImageView.setImageDrawable(animation);
@@ -192,6 +217,7 @@ public class GifMakerActivity extends AppCompatActivity implements FramesAdapter
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        if (data == null) return;
         switch (requestCode) {
             case 1:
                 ClipData clipData = data.getClipData();
@@ -334,6 +360,7 @@ public class GifMakerActivity extends AppCompatActivity implements FramesAdapter
 
     private void extractFramesFromVideo(Uri uri) {
         MediaMetadataRetriever retriever = new MediaMetadataRetriever();
+        System.out.println("GifAcrtivity: " + getPath(uri) + ", " + uri.toString());
         try {
             retriever.setDataSource(getPath(uri));
         } catch (Exception e) {
@@ -382,16 +409,36 @@ public class GifMakerActivity extends AppCompatActivity implements FramesAdapter
                 super.onPreExecute();
                 progressDialog = new ProgressDialog(GifMakerActivity.this);
                 progressDialog.setMessage("Please wait..");
+                progressDialog.setCancelable(false);
                 progressDialog.show();
             }
 
             @Override
             protected Void doInBackground(Void... voids) {
-                int random = (int)(Math.random()*9000)+1000;
-                File gifMaker = new File(Environment.getExternalStorageDirectory(), "output.gif");
-                //File filePath = new File(gifMaker, "GifMaker_" + random + ".gif");
+                File filePath;
+                if (TextUtils.isEmpty(gifPath)) {
+                    int random = (int) (Math.random() * 9000) + 1000;
+                    File gifMaker = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES), "Gif Maker");
+                    if (!gifMaker.mkdir()) {
+                        Log.e("GifMakerActivity: ", "Directory doesn't exist");
+                    }
+                    filePath = new File(gifMaker, "GifMaker_" + random + ".gif");
+                } else {
+                    filePath = new File(gifPath);
+                }
 
-                ByteArrayOutputStream bos = new ByteArrayOutputStream();
+                try {
+                    int w = bitmaps.get(0).getWidth();
+                    int h = bitmaps.get(0).getHeight();
+                    GifEncoder gifEncoder = new GifEncoder();
+                    gifEncoder.init(w, h, filePath.getAbsolutePath(), GifEncoder.EncodingType.ENCODING_TYPE_FAST);
+                    for (Bitmap bitmap : bitmaps) {
+                        gifEncoder.encodeFrame(Bitmap.createScaledBitmap(bitmap, w, h, false), duration);
+                    }
+                    gifEncoder.close();
+                } catch (FileNotFoundException e) {}
+
+                /*ByteArrayOutputStream bos = new ByteArrayOutputStream();
                 AnimatedGifEncoder encoder = new AnimatedGifEncoder();
                 encoder.start(bos);
                 Log.d("duration: ", duration + "");
@@ -414,7 +461,7 @@ public class GifMakerActivity extends AppCompatActivity implements FramesAdapter
                     bos.close();
                 } catch (FileNotFoundException e) {
                 } catch (IOException e) {
-                }
+                }*/
 
                 /*AnimatedGifWriter writer = new AnimatedGifWriter(true);
                 try {
@@ -427,6 +474,15 @@ public class GifMakerActivity extends AppCompatActivity implements FramesAdapter
                 } catch (Exception e) {
 
                 }*/
+
+                MediaScannerConnection.scanFile(GifMakerActivity.this,
+                        new String[] { filePath.getAbsolutePath() }, null,
+                        new MediaScannerConnection.OnScanCompletedListener() {
+                            public void onScanCompleted(String path, Uri uri) {
+                                //Log.i("ExternalStorage", "Scanned " + path + ":");
+                                //Log.i("ExternalStorage", "-> uri=" + uri);
+                            }
+                        });
 
                 return null;
             }
@@ -471,5 +527,10 @@ public class GifMakerActivity extends AppCompatActivity implements FramesAdapter
             mPauseButton.setVisibility(View.INVISIBLE);
             mPlayButton.setVisibility(View.VISIBLE);
         }
+    }
+
+    @Override
+    public void onBackPressed() {
+        startActivity(new Intent(GifMakerActivity.this, MainActivity.class).setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP));
     }
 }
